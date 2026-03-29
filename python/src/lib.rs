@@ -53,6 +53,7 @@ fn bolt(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCircle>()?;
     m.add_class::<PyRectangle>()?;
     m.add_class::<PySquare>()?;
+    m.add_class::<PyOrientedRectangle>()?;
     m.add_class::<PyRng>()?;
     Ok(())
 }
@@ -97,6 +98,35 @@ impl PySquare {
             x,
             y,
             radius,
+            angle,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+#[pyclass(name = "OrientedRectangle")]
+pub struct PyOrientedRectangle {
+    #[pyo3(get, set)]
+    pub x: f32,
+    #[pyo3(get, set)]
+    pub y: f32,
+    #[pyo3(get, set)]
+    pub width: f32,
+    #[pyo3(get, set)]
+    pub height: f32,
+    #[pyo3(get, set)]
+    pub angle: f32,
+}
+
+#[pymethods]
+impl PyOrientedRectangle {
+    #[new]
+    pub fn new(x: f32, y: f32, width: f32, height: f32, angle: f32) -> Self {
+        PyOrientedRectangle {
+            x,
+            y,
+            width,
+            height,
             angle,
         }
     }
@@ -197,11 +227,7 @@ impl PyRectangle {
         self.rectangle.expand_to_include(&other.rectangle);
     }
 
-    pub fn get_random_circle_coords_inside(
-        &mut self,
-        radius: f32,
-        rng: &mut PyRng,
-    ) -> (f32, f32) {
+    pub fn get_random_circle_coords_inside(&mut self, radius: f32, rng: &mut PyRng) -> (f32, f32) {
         self.rectangle
             .get_random_circle_coords_inside(radius, &mut rng.rng)
     }
@@ -267,6 +293,18 @@ fn extract_shape(py: Python, shape: Py<PyAny>) -> PyResult<ShapeEnum> {
 }
 
 fn extract_shape_ncollide(py: Python, shape: Py<PyAny>) -> PyResult<ShapeWithPosition> {
+    if let Ok(py_oriented_rectangle) = shape.extract::<PyOrientedRectangle>(py) {
+        return Ok(ShapeWithPosition {
+            shape: SharedShape::new(Cuboid::new(Vector::new(
+                py_oriented_rectangle.width / 2.0,
+                py_oriented_rectangle.height / 2.0,
+            ))),
+            position: Isometry::new(
+                Vector::new(py_oriented_rectangle.x, py_oriented_rectangle.y),
+                py_oriented_rectangle.angle,
+            ),
+        });
+    }
     if let Ok(py_square) = shape.extract::<PySquare>(py) {
         return Ok(ShapeWithPosition {
             shape: SharedShape::new(Cuboid::new(Vector::new(py_square.radius, py_square.radius))),
